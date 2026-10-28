@@ -75,6 +75,68 @@ class PromptListTests(unittest.TestCase):
         self.assertEqual(len(cls.RETURN_TYPES), len(cls.RETURN_NAMES))
 
 
+class LoadDatasetTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.out = Path(temp.name) / "output"
+        self.inp = Path(temp.name) / "input"
+        self.set = self.out / "krea2_dataset" / "my_person"
+        self.set.mkdir(parents=True)
+        self.inp.mkdir()
+        self.saved = (pack.output_dir, pack.input_dir)
+        pack.output_dir, pack.input_dir = (lambda: str(self.out)), (lambda: str(self.inp))
+        self.addCleanup(lambda: setattr(pack, "output_dir", self.saved[0]))
+        self.addCleanup(lambda: setattr(pack, "input_dir", self.saved[1]))
+
+    def png(self, name, caption=None, size=(8, 6), color=(255, 0, 0)):
+        from PIL import Image
+        Image.new("RGB", size, color).save(self.set / name)
+        if caption is not None:
+            (self.set / name).with_suffix(".txt").write_text(caption + "\n", encoding="utf-8")
+
+    def test_pairs_images_with_captions_in_order(self):
+        self.png("image_0002.png", "zxq person, profile")
+        self.png("image_0001.png", "zxq person, front view")
+        self.png("image_0003.png")                       # no caption -> ""
+        (self.set / "notes.txt").write_text("not a caption", encoding="utf-8")
+        items = pack.read_dataset(pack.dataset_folder("krea2_dataset/my_person", "output"))
+        self.assertEqual([Path(p).name for p, _ in items], ["image_0001.png", "image_0002.png", "image_0003.png"])
+        self.assertEqual([c for _, c in items], ["zxq person, front view", "zxq person, profile", ""])
+
+    def test_folder_must_exist_and_stay_inside_its_base(self):
+        with self.assertRaises(FileNotFoundError):
+            pack.dataset_folder("krea2_dataset/nobody", "output")
+        for bad in ("", "/", "..", "../input", "krea2_dataset/../../x"):
+            with self.subTest(folder=bad), self.assertRaises((ValueError, FileNotFoundError)):
+                pack.dataset_folder(bad, "output")
+        (self.inp / "mine").mkdir()
+        self.assertEqual(pack.dataset_folder("mine", "input"), os.path.realpath(self.inp / "mine"))
+
+    def test_empty_folder_is_an_error(self):
+        with self.assertRaisesRegex(ValueError, "no images"):
+            pack.read_dataset(str(self.set))
+
+    def test_changes_are_noticed(self):
+        self.png("image_0001.png", "a")
+        self.png("image_0002.png", "b")
+        before = pack.Krea2LoadDataset.IS_CHANGED("krea2_dataset/my_person", "output")
+        (self.set / "image_0002.png").unlink()            # a weak image deleted
+        self.assertNotEqual(before, pack.Krea2LoadDataset.IS_CHANGED("krea2_dataset/my_person", "output"))
+
+    @unittest.skipIf(torch is None, "torch not installed")
+    def test_run_returns_image_tensors_and_captions(self):
+        self.png("image_0001.png", "zxq person, front", size=(8, 6), color=(255, 0, 0))
+        self.png("image_0002.jpg", "zxq person, side", size=(4, 4), color=(0, 0, 255))
+        images, captions, count = pack.Krea2LoadDataset().run("krea2_dataset/my_person", "output")
+        self.assertEqual(count, 2)
+        self.assertEqual(captions, ["zxq person, front", "zxq person, side"])
+        self.assertEqual(tuple(images[0].shape), (1, 6, 8, 3))
+        self.assertAlmostEqual(float(images[0][0, 0, 0, 0]), 1.0)
+        self.assertEqual(images[0].dtype, torch.float32)
+        self.assertEqual(pack.Krea2LoadDataset.OUTPUT_IS_LIST, (True, True, False))
+
+
 @unittest.skipIf(torch is None, "torch not installed")
 class ContactSheetTests(unittest.TestCase):
     def test_grid_geometry_and_placement(self):

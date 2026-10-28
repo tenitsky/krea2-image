@@ -1,15 +1,16 @@
-# Krea 2 Image: RunPod ComfyUI template (single, batch, eight views, LoRA training set)
+# Krea 2 Image: RunPod ComfyUI template (single, batch, eight views, LoRA training set and training)
 
 A one-click RunPod template for **Krea 2 Turbo**, Krea's 12.9B open-weights
 text-to-image model (June 2026), in ComfyUI with JupyterLab. It runs on a **Network
-Volume or a Global Volume**, and ships four workflows:
+Volume or a Global Volume**, and ships five workflows:
 
 | Workflow | What it makes |
 |---|---|
 | `krea2_1_single_image` | one prompt -> one image |
 | `krea2_2_batch` | one prompt per line (or a `.txt` file) -> one image each, plus a contact sheet |
 | `krea2_3_eight_views` | a reference portrait -> the **same person** from 8 views: close-up, front, both three-quarters, both profiles, back, full body |
-| `krea2_4_lora_training_set` | a reference portrait -> **24 varied images of the same person + a caption `.txt` each**, the folder layout LoRA trainers read (for example for a MiniMax H3 character LoRA) |
+| `krea2_4_lora_training_set` | a reference portrait -> **24 varied images of the same person + a caption `.txt` each**, the folder layout LoRA trainers read |
+| `krea2_5_train_lora` | that folder -> a **Krea 2 image LoRA**, trained in ComfyUI, then tested on Turbo with your trigger word |
 
 All four use Krea 2 Turbo the way Comfy-Org's own Krea 2 templates do: **8 steps,
 CFG 1, euler / simple**, the Qwen3-VL 4B text encoder and the Qwen-Image VAE.
@@ -38,10 +39,45 @@ the prompt prefix and suffix ask to keep the face, hair, skin tone and clothes.
 Image-Text (to Folder)** node to `ComfyUI/output/krea2_dataset/<folder>/` as
 `image_0001.png` + `image_0001.txt`, ... Each caption is your trigger word (Prompt List >
 `caption_prefix`, default `zxq person,`) plus that line. The 24 lines are mostly face and
-upper body - what a talking-head video model sees - with varied angles, expressions,
-light, clothes and backgrounds, so a LoRA learns the person, not one photo. Download the
-folder with JupyterLab (right-click > Download as archive) and delete weak images before
-training.
+upper body, with varied angles, expressions, light, clothes and backgrounds, so a LoRA
+learns the person, not one photo. Delete weak images in JupyterLab, then train with
+workflow 5 (or download the folder - right-click > Download as archive - for another
+trainer).
+
+## Training a Krea 2 LoRA (workflow 5)
+
+`krea2_5_train_lora` trains an **image** LoRA in ComfyUI itself, with ComfyUI's own
+training nodes (v0.35.0: Make Training Dataset, Train LoRA, Save LoRA Weights, Plot Loss
+Graph). One queue:
+
+1. **Load Training Set** reads a folder of images + same-name caption `.txt` files from
+   `ComfyUI/output/` (default `krea2_dataset/my_person`, where workflow 4 writes) or
+   `ComfyUI/input/`. Images you deleted are left out.
+2. **Make Training Dataset** encodes them with the Qwen-Image VAE and the captions with the
+   Qwen3-VL text encoder.
+3. **Train LoRA** trains on **Krea 2 Raw** (`krea2_raw_fp8_scaled`), the undistilled
+   checkpoint Krea released to be fine-tuned. The FP8 weights stay frozen and
+   **bypass_mode** attaches the LoRA through hooks; gradient checkpointing is on.
+   Starting point for 15-30 images: rank 16, learning rate 1e-4, 1,500 steps, batch 1.
+4. **Save LoRA Weights** writes
+   `ComfyUI/output/loras/krea2_my_person_<steps>_steps_00001_.safetensors`, and **Plot
+   Loss Graph** `output/krea2_lora/loss_graph_*.png` (it should fall, then flatten).
+5. The new LoRA goes straight onto **Krea 2 Turbo** and renders the **test prompts** (use
+   your trigger word, default `zxq person`) to `output/krea2_lora/`, with a contact sheet.
+
+`ComfyUI/output/loras/` is added to ComfyUI's LoRA folders by this template's node pack,
+so the trained LoRA shows up in every LoRA loader: in the other workflows, add a
+**LoraLoaderModelOnly** after *Load Krea 2 Turbo* (strength 0.8-1.0). To train further,
+pick the saved LoRA in Train LoRA > `existing_lora` and queue again.
+
+**GPU for training:** 32 GB+ (RTX 5090) or 48 GB (L40S, A6000); A100 / H100 are faster.
+On 24 GB, turn on **offloading** in Train LoRA (much slower).
+
+> Not yet run on a pod: the settings above are a starting point, not tuned values, and
+> how well a LoRA trained on Raw carries over to Turbo is the first thing to check in the
+> test images. If it does not, try the LoRA on Raw itself, or a dedicated trainer such as
+> [ai-toolkit](https://github.com/ostris/ai-toolkit), which trains Krea 2 with a Turbo
+> training adapter.
 
 ## Storage: Network Volume or Global Volume
 
@@ -53,7 +89,7 @@ Attach **one** at `/workspace`. Setup detects which it is and says so in the log
 | Where pods can run | its datacenter only | any datacenter: more GPUs to choose from |
 | ComfyUI, venv, node pack | on the volume | on the container disk, set up again on each fresh container (a few minutes) |
 | Models, inputs, outputs, saved workflows | on the volume | on the volume |
-| Size | fixed: **40 GB** recommended | grows with what you store |
+| Size | fixed: **60 GB** recommended | grows with what you store |
 | Container disk | 10 GB | **40 GB** (first-boot downloads are staged there) |
 
 A Global Volume is object storage: no file locking, atomic rename, hard links or
@@ -74,14 +110,15 @@ Network Volume at `/workspace` wins unless `KREA2_STORAGE=global`.
 | `diffusion_models/krea2_turbo_fp8_scaled.safetensors` | 12.2 GB | default |
 | `text_encoders/qwen3vl_4b_fp8_scaled.safetensors` | 4.9 GB | default |
 | `vae/qwen_image_vae.safetensors` | 0.2 GB | default |
-| `diffusion_models/krea2_turbo_bf16.safetensors` | 24.5 GB | `KREA2_MODELS=bf16`, 48 GB+ GPUs |
-| `diffusion_models/krea2_turbo_nvfp4.safetensors` | 7.2 GB | `KREA2_MODELS=nvfp4`, RTX 50xx / Blackwell |
-| `diffusion_models/krea2_raw_fp8_scaled.safetensors` | 12.2 GB | `KREA2_MODELS=raw`, the undistilled model for fine-tuning |
+| `diffusion_models/krea2_turbo_bf16.safetensors` | 24.5 GB | `KREA2_MODELS=bf16,raw`, 48 GB+ GPUs |
+| `diffusion_models/krea2_turbo_nvfp4.safetensors` | 7.2 GB | `KREA2_MODELS=nvfp4,raw`, RTX 50xx / Blackwell |
+| `diffusion_models/krea2_raw_fp8_scaled.safetensors` | 12.2 GB | default: the undistilled model, for LoRA training |
 | `text_encoders/qwen3vl_4b_bf16.safetensors` | 8.3 GB | `KREA2_TEXT_ENCODER=bf16` |
 | 9 style LoRAs + `krea2_style_reference` | 4.4 GB | `DOWNLOAD_STYLE_LORAS=1` |
 
-Default download: **17.4 GB**, once. `KREA2_MODELS` takes several, comma-separated
-(`fp8,nvfp4`). The workflows open on the FP8 file: pick another in **Load Krea 2 Turbo**.
+Default download: **29.6 GB**, once (`KREA2_MODELS=fp8,raw`). Set `KREA2_MODELS=fp8` to
+skip the Raw model if you won't train (17.4 GB). It takes several, comma-separated
+(`fp8,raw,nvfp4`). The workflows open on the FP8 file: pick another in **Load Krea 2 Turbo**.
 
 Style LoRA trigger words (strength 1.0): darkbrush `monochrome ink wash style`, dotmatrix
 `monochrome stippling style`, kidsdrawing `naive expressive sketch style`, neondrip
@@ -97,8 +134,8 @@ before commercial use.
 
 24 GB of VRAM or more: **RTX 4090, RTX 5090, L40S, A6000, A100, H100**. FP8 Turbo is
 12.2 GB plus the 4.9 GB text encoder, which ComfyUI moves off the GPU between steps when
-needed. On RTX 50xx / Blackwell, `KREA2_MODELS=nvfp4` (7.2 GB) is smaller and faster.
-Setup warns under 20 GB of VRAM.
+needed. On RTX 50xx / Blackwell, `KREA2_MODELS=nvfp4,raw` (Turbo 7.2 GB) is smaller and faster.
+Setup warns under 20 GB of VRAM. Training needs more (see above).
 
 ## RunPod template settings
 
@@ -108,7 +145,7 @@ Setup warns under 20 GB of VRAM.
 | Container image | **`runpod/comfyui:1.4.0-comfyuiv0.35.0-cuda12.8`** (ComfyUI v0.35.0: Krea 2 is native since v0.26.0) |
 | Container start command | the JSON in [`runpod-start.json`](runpod-start.json) (readable: [`bootstrap.sh`](bootstrap.sh)) |
 | Container disk | **40 GB** (Global Volume staging; 10 GB is enough with a Network Volume) |
-| Volume | each deployer attaches a **Network Volume** (40 GB) or **Global Volume** at `/workspace`; template volume disk 0 GB, mount path `/workspace` |
+| Volume | each deployer attaches a **Network Volume** (60 GB) or **Global Volume** at `/workspace`; template volume disk 0 GB, mount path `/workspace` |
 | HTTP ports | **`8188,8888`** (ComfyUI, JupyterLab) |
 | Environment variables | `JUPYTER_NO_AUTH=1`; optional `HF_TOKEN`, `KREA2_MODELS`, `KREA2_TEXT_ENCODER`, `DOWNLOAD_STYLE_LORAS`, `KREA2_STORAGE` |
 | README tab | paste [`TEMPLATE_README.md`](TEMPLATE_README.md) |
@@ -130,7 +167,7 @@ another branch or tag.
    (never over a file of the same name)
 6. Downloads the models (skip-if-present, resumable, every file's safetensors header and
    size checked)
-7. Installs the four workflows into ComfyUI's **Workflows** sidebar (never over one you edited)
+7. Installs the five workflows into ComfyUI's **Workflows** sidebar (never over one you edited)
 8. Hands over to the image's `/start.sh` (ComfyUI on 8188, JupyterLab on 8888)
 
 Look for `Storage: ...`, the downloads and **`Setup complete!`** in the pod log.
@@ -139,7 +176,7 @@ Look for `Storage: ...`, the downloads and **`Setup complete!`** in the pod log.
 
 | Var | Default | |
 |---|---|---|
-| `KREA2_MODELS` | `fp8` | Turbo checkpoints to download: `fp8`, `bf16`, `nvfp4`, `raw`, comma-separated |
+| `KREA2_MODELS` | `fp8,raw` | Checkpoints to download: `fp8`, `bf16`, `nvfp4` (Turbo), `raw`, comma-separated |
 | `KREA2_TEXT_ENCODER` | `fp8` | `fp8` or `bf16` |
 | `DOWNLOAD_STYLE_LORAS` | `0` | `1`: Krea's style LoRAs and the style-reference LoRA |
 | `HF_TOKEN` | *(empty)* | Not needed (ungated); raises Hugging Face rate limits |
@@ -149,15 +186,17 @@ Look for `Storage: ...`, the downloads and **`Setup complete!`** in the pod log.
 
 ## What has and hasn't been verified
 
-Verified: the four workflows against ComfyUI v0.35.0's node schemas (inputs, outputs,
+Verified: the five workflows against ComfyUI v0.35.0's node schemas (inputs, outputs,
 widget values, links) and against Comfy-Org's own Krea 2 templates' node settings; every
 model file a workflow loads is one setup downloads, at its path in Comfy-Org/Krea-2;
-the Prompt List and Contact Sheet nodes; the Network and Global Volume storage code (the
+the Prompt List, Contact Sheet and Load Training Set nodes; that the training workflow
+reads the folder the training-set workflow writes; the Network and Global Volume storage code (the
 tests in `tools/`, also run by CI on every push).
 
 **Not yet verified:** a boot on a real RunPod pod, a render of these workflows, how well
-Krea 2 Turbo keeps a person's identity in the eight-views and training-set workflows, and
-training a LoRA on the set.
+Krea 2 Turbo keeps a person's identity in the eight-views and training-set workflows,
+the training workflow on a GPU (memory, time per step, the settings), and whether a
+LoRA trained on Raw works on Turbo.
 
 ## Repository layout
 
@@ -165,14 +204,14 @@ training a LoRA on the set.
 ├── setup.sh                          # RunPod boot script
 ├── bootstrap.sh / runpod-start.json  # container start command (readable / paste-ready)
 ├── scripts/storage.py                # Network / Global Volume detection and checks
-├── custom_nodes/comfyui-krea2-batch/ # Prompt List, Contact Sheet
-├── workflows/                        # the four workflows (generated)
+├── custom_nodes/comfyui-krea2-batch/ # Prompt List, Contact Sheet, Load Training Set
+├── workflows/                        # the five workflows (generated)
 ├── samples/reference_portrait.png    # the portrait the reference workflows open on
 ├── prompts/krea2_batch_prompts.txt   # sample batch prompt file
 ├── tools/
 │   ├── build_workflow.py             # generates workflows/; re-run after edits
 │   ├── test_workflows.py             # graphs vs node schemas, settings, downloads
-│   ├── test_nodes.py                 # Prompt List, Contact Sheet
+│   ├── test_nodes.py                 # Prompt List, Contact Sheet, Load Training Set
 │   └── test_storage.py               # volume detection, Network and Global Volume
 ├── README.md
 ├── TEMPLATE_README.md                # paste into the template's README tab

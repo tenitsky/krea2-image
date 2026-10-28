@@ -77,7 +77,7 @@
    },
    "title": "About stage 2",
    "widgets_values": [
-    "## 2. Models - loaded once\n\n`krea2_turbo_fp8_scaled.safetensors` (diffusion_models), `qwen3vl_4b_fp8_scaled.safetensors` (text_encoders), `qwen_image_vae.safetensors` (vae). Downloaded by setup; they stay loaded between runs.\n\nOther precisions (set at deploy): `KREA2_MODELS=bf16` (48 GB+ GPUs), `nvfp4` (RTX 50xx / Blackwell, 7 GB). Then pick the file in **Load Krea 2 Turbo**."
+    "## 2. Models - loaded once\n\n`krea2_turbo_fp8_scaled.safetensors` (diffusion_models), `qwen3vl_4b_fp8_scaled.safetensors` (text_encoders), `qwen_image_vae.safetensors` (vae). Downloaded by setup; they stay loaded between runs.\n\nOther precisions (set at deploy, keep `raw` for training): `KREA2_MODELS=bf16,raw` (48 GB+ GPUs), `nvfp4,raw` (RTX 50xx / Blackwell, 7 GB). Then pick the file in **Load Krea 2 Turbo**."
    ],
    "color": "#222",
    "bgcolor": "#000"

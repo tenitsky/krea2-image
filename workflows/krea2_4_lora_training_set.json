@@ -25,7 +25,7 @@
    },
    "title": "Start here",
    "widgets_values": [
-    "# Krea 2 - LoRA training set\n\nBuilds a training set for a character LoRA (for example for MiniMax H3 talking-head videos): **24 images of the same person** with a caption .txt each.\n\n1. **Load Reference** (stage 1): a clear photo of the person.\n2. Set your **trigger word** in Prompt List > `caption_prefix` (default `zxq person,`).\n3. **Run** once. Images + captions go to `ComfyUI/output/krea2_dataset/<folder_name>/` as `image_0001.png` + `image_0001.txt`, the layout ai-toolkit, kohya and diffusion-pipe read.\n\n**Check every image** in the contact sheet and delete the ones where the face drifted before training: a LoRA learns its mistakes too.\n\n**Red nodes are the ones you set.** Stages run left to right with a note under each.\n\nFull instructions: https://github.com/tenitsky/krea2-image"
+    "# Krea 2 - LoRA training set\n\nBuilds a training set for a character LoRA: **24 images of the same person** with a caption .txt each.\n\n1. **Load Reference** (stage 1): a clear photo of the person.\n2. Set your **trigger word** in Prompt List > `caption_prefix` (default `zxq person,`).\n3. **Run** once. Images + captions go to `ComfyUI/output/krea2_dataset/my_person/` as `image_0001.png` + `image_0001.txt` (the layout ai-toolkit and kohya read too).\n\n**Check every image** in the contact sheet and delete the ones where the face drifted (JupyterLab): a LoRA learns its mistakes too. Then train with **krea2_5_train_lora**.\n\n**Red nodes are the ones you set.** Stages run left to right with a note under each.\n\nFull instructions: https://github.com/tenitsky/krea2-image"
    ],
    "color": "#222",
    "bgcolor": "#000"
@@ -77,7 +77,7 @@
    },
    "title": "About stage 2",
    "widgets_values": [
-    "## 2. Models - loaded once\n\n`krea2_turbo_fp8_scaled.safetensors` (diffusion_models), `qwen3vl_4b_fp8_scaled.safetensors` (text_encoders), `qwen_image_vae.safetensors` (vae). Downloaded by setup; they stay loaded between runs.\n\nOther precisions (set at deploy): `KREA2_MODELS=bf16` (48 GB+ GPUs), `nvfp4` (RTX 50xx / Blackwell, 7 GB). Then pick the file in **Load Krea 2 Turbo**."
+    "## 2. Models - loaded once\n\n`krea2_turbo_fp8_scaled.safetensors` (diffusion_models), `qwen3vl_4b_fp8_scaled.safetensors` (text_encoders), `qwen_image_vae.safetensors` (vae). Downloaded by setup; they stay loaded between runs.\n\nOther precisions (set at deploy, keep `raw` for training): `KREA2_MODELS=bf16,raw` (48 GB+ GPUs), `nvfp4,raw` (RTX 50xx / Blackwell, 7 GB). Then pick the file in **Load Krea 2 Turbo**."
    ],
    "color": "#222",
    "bgcolor": "#000"

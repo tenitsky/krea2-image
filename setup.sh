@@ -330,17 +330,18 @@ download_model() {
 }
 
 # -------------------------------------------------------------------
-# 3. Model downloads (~17.4 GB by default)
+# 3. Model downloads (~29.6 GB by default)
 # -------------------------------------------------------------------
-# KREA2_MODELS: which Krea 2 Turbo checkpoints, comma-separated. The workflows open on
-# fp8; pick another file in their "Load Krea 2 Turbo" node.
+# KREA2_MODELS: which Krea 2 checkpoints, comma-separated. The image workflows open on
+# Turbo fp8 (pick another file in their "Load Krea 2 Turbo" node); the LoRA training
+# workflow trains on Raw fp8.
 #   fp8    krea2_turbo_fp8_scaled    12.2 GB  24 GB+ GPUs (default)
 #   bf16   krea2_turbo_bf16          24.5 GB  48 GB+ GPUs, full precision
 #   nvfp4  krea2_turbo_nvfp4          7.2 GB  RTX 50xx / Blackwell only
-#   raw    krea2_raw_fp8_scaled      12.2 GB  the undistilled model, for fine-tuning
+#   raw    krea2_raw_fp8_scaled      12.2 GB  undistilled, for LoRA training (default)
 # KREA2_TEXT_ENCODER: fp8 (4.9 GB, default) or bf16 (8.3 GB).
 # DOWNLOAD_STYLE_LORAS=1: Krea's nine style LoRAs + the style-reference LoRA (~4.4 GB).
-KREA2_MODELS="${KREA2_MODELS:-fp8}"
+KREA2_MODELS="${KREA2_MODELS:-fp8,raw}"
 KREA2_TEXT_ENCODER="${KREA2_TEXT_ENCODER:-fp8}"
 DOWNLOAD_STYLE_LORAS="${DOWNLOAD_STYLE_LORAS:-0}"
 FAILED=0

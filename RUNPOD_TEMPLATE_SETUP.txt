@@ -51,7 +51,7 @@ Container disk:           40 GB
 
 Volume disk:              0 GB
 Volume mount path:        /workspace
-# Each deployer attaches their own Network Volume (40 GB) or Global Volume at
+# Each deployer attaches their own Network Volume (60 GB) or Global Volume at
 # /workspace when deploying. Setup detects which one and says so in the log.
 
 
@@ -71,7 +71,7 @@ TCP ports:                none (22 only if you want SSH)
 
 JUPYTER_NO_AUTH=1
 # Optional:
-#   KREA2_MODELS=fp8           fp8 | bf16 | nvfp4 | raw, comma-separated
+#   KREA2_MODELS=fp8,raw       fp8 | bf16 | nvfp4 | raw, comma-separated (raw: LoRA training)
 #   KREA2_TEXT_ENCODER=fp8     fp8 | bf16
 #   DOWNLOAD_STYLE_LORAS=0     1 = Krea's 9 style LoRAs + the style-reference LoRA
 #   HF_TOKEN=                  not needed (ungated); raises rate limits

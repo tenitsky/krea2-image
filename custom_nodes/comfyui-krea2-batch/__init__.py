@@ -1,5 +1,5 @@
 """
-Two small helper nodes for the Krea 2 template. No extra Python packages.
+Small helper nodes for the Krea 2 template. No extra Python packages.
 
 Prompt List: one prompt per line (or a .txt file in ComfyUI/input) -> a *list* of
 prompts, captions and seeds. ComfyUI runs everything downstream once per item, so one
@@ -7,10 +7,19 @@ queue renders the whole list: the batch workflow, the eight views and the LoRA
 training set are all this node feeding a normal Krea 2 graph.
 
 Contact Sheet: every image of such a run -> one grid image, to check a set at a glance.
+
+Load Training Set: a folder of images + same-name caption .txt files (what the training
+set workflow writes to ComfyUI/output/krea2_dataset/<name>) -> image and caption lists
+for ComfyUI's own Make Training Dataset / Train LoRA nodes. ComfyUI's Load Image-Text
+node reads ComfyUI/input only; this one reads output/ too, so nothing has to be moved.
+
+ComfyUI's Save LoRA Weights writes to ComfyUI/output/loras/. That folder is added to the
+LoRA search paths here, so a LoRA trained on the pod shows up in every LoRA loader.
 """
 import hashlib
 import os
 
+import numpy as np
 import torch
 
 try:
@@ -19,10 +28,18 @@ except ImportError:          # outside ComfyUI (tests)
     folder_paths = None
 
 CATEGORY = "Krea 2"
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
+
+if folder_paths is not None:
+    folder_paths.add_model_folder_path("loras", os.path.join(folder_paths.get_output_directory(), "loras"))
 
 
 def input_dir():
     return folder_paths.get_input_directory() if folder_paths else os.getcwd()
+
+
+def output_dir():
+    return folder_paths.get_output_directory() if folder_paths else os.getcwd()
 
 
 def read_lines(prompts, prompts_file):
@@ -153,6 +170,84 @@ class Krea2ContactSheet:
         return (contact_sheet(images, columns[0], gap[0], background[0]),)
 
 
-NODE_CLASS_MAPPINGS = {"Krea2PromptList": Krea2PromptList, "Krea2ContactSheet": Krea2ContactSheet}
+def dataset_folder(folder, location):
+    """folder (relative to ComfyUI/output or ComfyUI/input) -> its absolute path, which
+    must stay inside that base folder."""
+    base = os.path.realpath(output_dir() if location == "output" else input_dir())
+    path = os.path.realpath(os.path.join(base, (folder or "").strip().strip("/\\")))
+    if os.path.commonpath([base, path]) != base or path == base:
+        raise ValueError(f"Load Training Set: give a folder inside ComfyUI/{location}, "
+                         f"for example krea2_dataset/my_person.")
+    if not os.path.isdir(path):
+        raise FileNotFoundError(f"Load Training Set: no folder {path}. Run the training set "
+                                f"workflow first, or upload your images + captions there.")
+    return path
+
+
+def read_dataset(path):
+    """Sorted image files with the caption from the same-name .txt ("" if there is none)."""
+    names = sorted(f for f in os.listdir(path) if f.lower().endswith(IMAGE_EXTENSIONS))
+    if not names:
+        raise ValueError(f"Load Training Set: no images in {path}.")
+    items = []
+    for name in names:
+        caption_file = os.path.join(path, os.path.splitext(name)[0] + ".txt")
+        caption = ""
+        if os.path.isfile(caption_file):
+            with open(caption_file, encoding="utf-8-sig") as f:
+                caption = f.read().strip()
+        items.append((os.path.join(path, name), caption))
+    return items
+
+
+class Krea2LoadDataset:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {
+            "folder": ("STRING", {"default": "krea2_dataset/my_person",
+                                  "tooltip": "Folder of images + same-name .txt captions, "
+                                             "inside ComfyUI/output (or input)."}),
+            "location": (["output", "input"], {"default": "output"}),
+        }}
+
+    RETURN_TYPES = ("IMAGE", "STRING", "INT")
+    RETURN_NAMES = ("images", "captions", "count")
+    OUTPUT_IS_LIST = (True, True, False)
+    FUNCTION = "run"
+    CATEGORY = CATEGORY
+    DESCRIPTION = ("A folder of images + caption .txt files (the training set workflow's "
+                   "output) -> lists for Make Training Dataset.")
+
+    @classmethod
+    def IS_CHANGED(cls, folder, location):
+        """Re-read when files are added, removed or edited (e.g. weak images deleted)."""
+        try:
+            path = dataset_folder(folder, location)
+        except (ValueError, FileNotFoundError):
+            return float("nan")
+        h = hashlib.sha256()
+        for name in sorted(os.listdir(path)):
+            st = os.stat(os.path.join(path, name))
+            h.update(f"{name}:{st.st_size}:{st.st_mtime_ns};".encode())
+        return h.hexdigest()
+
+    def run(self, folder, location):
+        from PIL import Image, ImageOps
+        items = read_dataset(dataset_folder(folder, location))
+        images, captions = [], []
+        for path, caption in items:
+            with Image.open(path) as im:
+                rgb = ImageOps.exif_transpose(im).convert("RGB")
+                images.append(torch.from_numpy(np.asarray(rgb, dtype=np.float32) / 255.0)[None])
+            captions.append(caption)
+        missing = sum(1 for c in captions if not c)
+        print(f"[Krea2 Load Training Set] {len(images)} images"
+              + (f", {missing} without a caption" if missing else ""))
+        return (images, captions, len(images))
+
+
+NODE_CLASS_MAPPINGS = {"Krea2PromptList": Krea2PromptList, "Krea2ContactSheet": Krea2ContactSheet,
+                       "Krea2LoadDataset": Krea2LoadDataset}
 NODE_DISPLAY_NAME_MAPPINGS = {"Krea2PromptList": "Prompt List (one per line)",
-                              "Krea2ContactSheet": "Contact Sheet"}
+                              "Krea2ContactSheet": "Contact Sheet",
+                              "Krea2LoadDataset": "Load Training Set (folder)"}

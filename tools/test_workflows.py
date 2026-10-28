@@ -48,7 +48,24 @@ CORE = {
     # is_input_list node; texts is a force_input STRING socket
     "SaveImageTextDataSetToFolder": ([("images", "IMAGE", False), ("texts", "STRING", True)], [], 3, ()),
     "MarkdownNote": ([], [], 1, ()),
+    # training (comfy_extras/nodes_dataset.py, nodes_train.py)
+    "MakeTrainingDataset": ([("images", "IMAGE", False), ("vae", "VAE", False), ("clip", "CLIP", False),
+                             ("texts", "STRING", True)],
+                            [("latents", "LATENT"), ("conditioning", "CONDITIONING")], 0, ()),
+    # 18 settings: batch_size ... bypass_mode; its seed has no control_after_generate (the
+    # frontend adds none for a plain seed: Comfy-Org's saved TextGenerate shows it)
+    "TrainLoraNode": ([("model", "MODEL", False), ("latents", "LATENT", False),
+                       ("positive", "CONDITIONING", False)],
+                      [("lora", "LORA_MODEL"), ("loss_map", "LOSS_MAP"), ("steps", "INT")], 18, ()),
+    "SaveLoRA": ([("lora", "LORA_MODEL", False)], [], 2, ("steps",)),
+    "LossGraphNode": ([("loss", "LOSS_MAP", False)], [], 1, ()),
+    "LoraModelLoader": ([("model", "MODEL", False), ("lora", "LORA_MODEL", False)],
+                        [("model", "MODEL")], 2, ()),
 }
+TRAIN_ORDER = ["batch_size", "grad_accumulation_steps", "steps", "learning_rate", "rank", "optimizer",
+               "loss_function", "seed", "training_dtype", "lora_dtype", "quantized_backward",
+               "algorithm", "gradient_checkpointing", "checkpoint_depth", "offloading",
+               "existing_lora", "bucket_mode", "bypass_mode"]
 KREA_SAMPLER = [8, 1.0, "euler", "simple", 1.0]
 
 
@@ -171,6 +188,40 @@ class WorkflowTests(unittest.TestCase):
         (ds,) = [n for _, wf, nodes in self.each() for n in nodes.values()
                  if n["type"] == "SaveImageTextDataSetToFolder"]
         self.assertIsNotNone(next(i for i in ds["inputs"] if i["name"] == "texts")["link"])
+
+    def test_training_workflow(self):
+        wf = builder.build("train")
+        nodes = {n["id"]: n for n in wf["nodes"]}
+        src = {(l[3], nodes[l[3]]["inputs"][l[4]]["name"]): (l[1], nodes[l[1]]["outputs"][l[2]]["name"])
+               for l in wf["links"]}
+        (train,) = [n for n in nodes.values() if n["type"] == "TrainLoraNode"]
+        settings = dict(zip(TRAIN_ORDER, train["widgets_values"]))
+        self.assertEqual(settings, builder.TRAIN)
+        self.assertTrue(settings["bypass_mode"])          # FP8 weights stay frozen
+        self.assertIn(settings["algorithm"], ("LoRA", "LoHa", "LoKr", "OFT"))
+        self.assertIn(settings["optimizer"], ("AdamW", "Adam", "SGD", "RMSprop"))
+        self.assertIn(settings["training_dtype"], ("bf16", "fp32", "none"))
+        # trained on Raw, tested on Turbo
+        model_src = nodes[src[(train["id"], "model")][0]]
+        self.assertEqual(model_src["widgets_values"][0], builder.RAW_UNET)
+        (apply,) = [n for n in nodes.values() if n["type"] == "LoraModelLoader"]
+        self.assertEqual(nodes[src[(apply["id"], "model")][0]]["widgets_values"][0], builder.UNET)
+        self.assertEqual(src[(apply["id"], "lora")], (train["id"], "lora"))
+        (ks,) = [n for n in nodes.values() if n["type"] == "KSampler"]
+        self.assertEqual(src[(ks["id"], "model")], (apply["id"], "model"))
+        # the dataset is encoded with its captions, and the LoRA is saved with its step count
+        (make,) = [n for n in nodes.values() if n["type"] == "MakeTrainingDataset"]
+        self.assertEqual(nodes[src[(make["id"], "texts")][0]]["type"], "Krea2LoadDataset")
+        (save,) = [n for n in nodes.values() if n["type"] == "SaveLoRA"]
+        self.assertEqual(src[(save["id"], "steps")], (train["id"], "steps"))
+        self.assertTrue(save["widgets_values"][0].startswith("loras/"))   # output/loras is registered
+        # it reads the folder the training-set workflow writes
+        (load,) = [n for n in nodes.values() if n["type"] == "Krea2LoadDataset"]
+        (ds,) = [n for n in builder.build("dataset")["nodes"] if n["type"] == "SaveImageTextDataSetToFolder"]
+        self.assertEqual(load["widgets_values"], [ds["widgets_values"][0], "output"])
+        trigger = builder.TRIGGER.rstrip(",")
+        tests = next(n for n in nodes.values() if n["type"] == "Krea2PromptList")
+        self.assertTrue(all(l.startswith(trigger) for l in pack.read_lines(tests["widgets_values"][0], "")))
 
     def test_setup_downloads_every_model_a_workflow_loads(self):
         fetched = set(re.findall(r'download_model "([a-z_]+/[^"]+)"', SETUP))

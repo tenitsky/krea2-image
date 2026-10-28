@@ -43,7 +43,24 @@ WORKFLOWS = [
     dict(kind="batch", path="krea2_2_batch.json", id="8c2e4d19-6b7a-4f30-a5d2-3e9f1b6c4a22"),
     dict(kind="views", path="krea2_3_eight_views.json", id="a3d7e5f2-1c8b-4e69-b0a4-7d2c9e5f3b33"),
     dict(kind="dataset", path="krea2_4_lora_training_set.json", id="d4e8f6a3-9b2c-4d71-8e5f-1a6b3c7d4e44"),
+    dict(kind="train", path="krea2_5_train_lora.json", id="e5f9a7b4-0c3d-4e82-9f6a-2b7c4d8e5f55"),
 ]
+
+# LoRA training (ComfyUI's own Train LoRA node). Krea 2 Raw is the undistilled checkpoint
+# Krea released to be fine-tuned; the LoRA is then tested on Turbo, the model the other
+# workflows use. FP8 weights stay frozen: bypass mode attaches the LoRA through hooks.
+RAW_UNET = "krea2_raw_fp8_scaled.safetensors"
+DATASET_FOLDER = "krea2_dataset/my_person"
+LORA_PREFIX = "loras/krea2_my_person"
+TRAIN = dict(batch_size=1, grad_accumulation_steps=1, steps=1500, learning_rate=0.0001, rank=16,
+             optimizer="AdamW", loss_function="MSE", seed=42, training_dtype="bf16",
+             lora_dtype="bf16", quantized_backward=False, algorithm="LoRA",
+             gradient_checkpointing=True, checkpoint_depth=1, offloading=False,
+             existing_lora="[None]", bucket_mode=False, bypass_mode=True)
+TEST_PROMPTS = """zxq person, portrait photo in a cozy cafe, warm window light, smiling
+zxq person, head and shoulders, studio portrait, grey background, neutral expression
+zxq person, walking on a city street at night, neon lights, cinematic
+zxq person, close-up, outdoors in a park, golden hour, laughing"""
 
 SINGLE_PROMPT = ("Editorial portrait photo of a woman in her thirties with short silver hair and "
                  "freckles, wearing a mustard wool coat, standing on a rainy city street at dusk, "
@@ -114,7 +131,7 @@ NOTE_MODELS = f"""## 2. Models - loaded once
 
 `{UNET}` (diffusion_models), `{TEXT_ENCODER}` (text_encoders), `{VAE}` (vae). Downloaded by setup; they stay loaded between runs.
 
-Other precisions (set at deploy): `KREA2_MODELS=bf16` (48 GB+ GPUs), `nvfp4` (RTX 50xx / Blackwell, 7 GB). Then pick the file in **Load Krea 2 Turbo**."""
+Other precisions (set at deploy, keep `raw` for training): `KREA2_MODELS=bf16,raw` (48 GB+ GPUs), `nvfp4,raw` (RTX 50xx / Blackwell, 7 GB). Then pick the file in **Load Krea 2 Turbo**."""
 
 NOTE_SAMPLE = f"""## 4. Sampling
 
@@ -132,7 +149,9 @@ def note_start(kind):
         "views": ("Krea 2 - Eight views of a person",
                   "1. **Load Reference** (stage 1): a clear photo of the person (the sample opens). Head and shoulders or upper body works best.\n2. **Run** once. Eight views of the same person - close-up, front, both three-quarters, both profiles, back, full body - are saved to `ComfyUI/output/krea2_views/`, plus one contact sheet.\n\nEdit the views in **Prompt List**: one per line."),
         "dataset": ("Krea 2 - LoRA training set",
-                    f"Builds a training set for a character LoRA (for example for MiniMax H3 talking-head videos): **24 images of the same person** with a caption .txt each.\n\n1. **Load Reference** (stage 1): a clear photo of the person.\n2. Set your **trigger word** in Prompt List > `caption_prefix` (default `{TRIGGER}`).\n3. **Run** once. Images + captions go to `ComfyUI/output/krea2_dataset/<folder_name>/` as `image_0001.png` + `image_0001.txt`, the layout ai-toolkit, kohya and diffusion-pipe read.\n\n**Check every image** in the contact sheet and delete the ones where the face drifted before training: a LoRA learns its mistakes too."),
+                    f"Builds a training set for a character LoRA: **24 images of the same person** with a caption .txt each.\n\n1. **Load Reference** (stage 1): a clear photo of the person.\n2. Set your **trigger word** in Prompt List > `caption_prefix` (default `{TRIGGER}`).\n3. **Run** once. Images + captions go to `ComfyUI/output/{DATASET_FOLDER}/` as `image_0001.png` + `image_0001.txt` (the layout ai-toolkit and kohya read too).\n\n**Check every image** in the contact sheet and delete the ones where the face drifted (JupyterLab): a LoRA learns its mistakes too. Then train with **krea2_5_train_lora**."),
+        "train": ("Krea 2 - Train a LoRA",
+                  f"Trains a Krea 2 **image** LoRA on a folder of images + captions, then tests it.\n\n1. Make the set with **krea2_4_lora_training_set** (or upload your own images + same-name .txt captions into a folder under `ComfyUI/output/`).\n2. **Load Training Set** (stage 1): the folder, default `{DATASET_FOLDER}`. Deleted images are left out.\n3. **Test prompts** (stage 4): use your trigger word.\n4. **Run** once. Training takes a while (watch the progress bar on Train LoRA); then the test images render.\n\nThe LoRA is saved to `ComfyUI/output/{LORA_PREFIX}_<steps>_steps_00001_.safetensors` and appears in every LoRA loader.\n\nNeeds a 32 GB+ GPU (RTX 5090) or 48 GB (L40S, A6000); 24 GB with **offloading** on, slowly. The Raw model downloads by default (`KREA2_MODELS=fp8,raw`)."),
     }[kind]
     return f"""# {steps[0]}
 
@@ -142,6 +161,22 @@ def note_start(kind):
 
 Full instructions: https://github.com/tenitsky/krea2-image"""
 
+
+NOTE_TRAIN = f"""## 3. Training
+
+ComfyUI's own **Train LoRA** node on **Krea 2 Raw** (`{RAW_UNET}`), the undistilled model Krea released to be fine-tuned. The FP8 weights stay frozen; **bypass_mode** attaches the LoRA through hooks, which is what lets a 12.9B model train on one 32-48 GB GPU.
+
+Starting point for a 15-30 image character set: **rank {TRAIN['rank']}, learning rate {TRAIN['learning_rate']}, {TRAIN['steps']} steps**, batch 1. More images -> more steps. Out of memory: turn **offloading** on (slower).
+
+**Loss graph**: `output/krea2_lora/loss_graph_*.png`. It should fall and then flatten; a curve that keeps rising means the learning rate is too high.
+
+**Continue a run**: pick the saved LoRA in `existing_lora` and queue again with more steps."""
+
+NOTE_TEST = """## 4. Test on Turbo
+
+The new LoRA goes straight onto **Krea 2 Turbo** (8 steps, the model the other workflows use) and renders the test prompts in **Test prompts**. Use your trigger word in them.
+
+The LoRA is saved to `ComfyUI/output/loras/` and shows up in every LoRA loader. In the other workflows, add a **LoraLoaderModelOnly** after *Load Krea 2 Turbo* (or enable the Style LoRA node in the single-image workflow and pick your LoRA). Strength 0.8-1.0."""
 
 NOTE_REFERENCE = """## 3. The reference
 
@@ -344,6 +379,74 @@ def build(kind):
                   ("3. Encode", "reference", [21], []),
                   ("4. Sample", "sample", [50, 51, 52, 53], [7]),
                   ("5. Save", "output", [60, 61, 62], [])]
+
+    elif kind == "train":
+        md(g, 6, "About training", NOTE_TRAIN, (COLUMN_W, 520))
+        md(g, 8, "About the test", NOTE_TEST, (COLUMN_W, 420))
+        g.node(10, "Krea2LoadDataset",
+               outputs=[("images", "IMAGE", True), ("captions", "STRING", True), ("count", "INT")],
+               widgets=[DATASET_FOLDER, "output"], title="Load Training Set (folder)", color=INPUT,
+               cnr=PACK, size=size(106))
+        g.node(30, "UNETLoader", outputs=[("MODEL", "MODEL")], widgets=[RAW_UNET, "default"],
+               title="Load Krea 2 Raw (training)", size=size(82))
+        g.node(31, "CLIPLoader", outputs=[("CLIP", "CLIP")],
+               widgets=[TEXT_ENCODER, "krea2", "default"], title="Load text encoder (Qwen3-VL 4B)",
+               size=size(106))
+        g.node(32, "VAELoader", outputs=[("VAE", "VAE")], widgets=[VAE], title="Load VAE", size=size(58))
+        g.node(40, "MakeTrainingDataset",
+               inputs=[("images", "IMAGE", I, False), ("vae", "VAE", I, False), ("clip", "CLIP", I, False),
+                       ("texts", "STRING", I, True)],
+               outputs=[("latents", "LATENT", True), ("conditioning", "CONDITIONING", True)],
+               title="Make Training Dataset (encode images + captions)", size=size(110))
+        g.node(41, "TrainLoraNode",
+               inputs=[("model", "MODEL", I, False), ("latents", "LATENT", I, False),
+                       ("positive", "CONDITIONING", I, False)],
+               outputs=[("lora", "LORA_MODEL"), ("loss_map", "LOSS_MAP"), ("steps", "INT")],
+               widgets=list(TRAIN.values()), title="Train LoRA", color=INPUT, size=size(600))
+        g.node(42, "SaveLoRA", inputs=[("lora", "LORA_MODEL", I, False), ("steps", "INT", W, True)],
+               widgets=[LORA_PREFIX, 0], title="Save LoRA (output/loras/)", size=size(82))
+        g.node(43, "LossGraphNode", inputs=[("loss", "LOSS_MAP", I, False)],
+               widgets=["krea2_lora/loss_graph"], title="Loss graph (output/krea2_lora/)", size=size(300))
+        g.node(34, "UNETLoader", outputs=[("MODEL", "MODEL")], widgets=[UNET, "default"],
+               title="Load Krea 2 Turbo (test)", size=size(82))
+        g.node(44, "LoraModelLoader", inputs=[("model", "MODEL", I, False), ("lora", "LORA_MODEL", I, False)],
+               outputs=[("model", "MODEL")], widgets=[1.0, False], title="Apply the new LoRA to Turbo",
+               size=size(82))
+        prompt_list(g, TEST_PROMPTS, seed=3000)
+        g.nodes[-1]["title"] = "Test prompts (use your trigger word)"
+        g.node(21, "CLIPTextEncode", inputs=[("clip", "CLIP", I, False), ("text", "STRING", W, False)],
+               outputs=[("CONDITIONING", "CONDITIONING")], widgets=[""], title="Encode each test prompt",
+               size=size(90))
+        L(10, "images", 40, "images")
+        L(10, "captions", 40, "texts")
+        L(32, 0, 40, "vae")
+        L(31, 0, 40, "clip")
+        L(30, 0, 41, "model")
+        L(40, "latents", 41, "latents")
+        L(40, "conditioning", 41, "positive")
+        L(41, "lora", 42, "lora")
+        L(41, "steps", 42, "steps")
+        L(41, "loss_map", 43, "loss")
+        L(34, 0, 44, "model")
+        L(41, "lora", 44, "lora")
+        L(31, 0, 21, "clip")
+        L(20, "prompts", 21, "text")
+        sampler(g, 44, 21, (42, "fixed"), seed_from=(20, "seeds"))
+        g.node(60, "SaveImage", inputs=[("images", "IMAGE", I, False)], outputs=[("images", "IMAGE")],
+               widgets=["krea2_lora/test"], title="Save test images (output/krea2_lora/)", size=size(300))
+        g.node(61, "Krea2ContactSheet", inputs=[("images", "IMAGE", I, False)],
+               outputs=[("sheet", "IMAGE")], widgets=[4, 8, 1.0], title="Contact sheet", cnr=PACK,
+               size=size(130))
+        g.node(62, "SaveImage", inputs=[("images", "IMAGE", I, False)], outputs=[("images", "IMAGE")],
+               widgets=["krea2_lora/test_sheet"], title="Save contact sheet", size=size(300))
+        L(53, 0, 60, "images")
+        L(53, 0, 61, "images")
+        L(61, 0, 62, "images")
+        stages = [("1. Training set", "input", [10], []),
+                  ("2. Models", "models", [30, 31, 32], [5]),
+                  ("3. Train", "reference", [40, 41, 42, 43], [6]),
+                  ("4. Test on Turbo", "sample", [34, 44, 20, 21, 50, 51, 52, 53], [8]),
+                  ("5. Save", "output", [60, 61, 62], [7])]
 
     else:   # views / dataset: the reference portrait carries the identity
         views = kind == "views"
