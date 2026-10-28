@@ -70,8 +70,9 @@ so the trained LoRA shows up in every LoRA loader: in the other workflows, add a
 **LoraLoaderModelOnly** after *Load Krea 2 Turbo* (strength 0.8-1.0). To train further,
 pick the saved LoRA in Train LoRA > `existing_lora` and queue again.
 
-**GPU for training:** 32 GB+ (RTX 5090) or 48 GB (L40S, A6000); A100 / H100 are faster.
-On 24 GB, turn on **offloading** in Train LoRA (much slower).
+**GPU for training:** 48 GB recommended (L40S, RTX 6000 Ada, A6000, A40), 32 GB minimum
+(RTX 5090, tight), 80 GB fastest (A100, H100); estimates until measured. On 24 GB, turn on
+**offloading** in Train LoRA (much slower). See [GPU](#gpu).
 
 > Not yet run on a pod: the settings above are a starting point, not tuned values, and
 > how well a LoRA trained on Raw carries over to Turbo is the first thing to check in the
@@ -132,10 +133,25 @@ before commercial use.
 
 ## GPU
 
-24 GB of VRAM or more: **RTX 4090, RTX 5090, L40S, A6000, A100, H100**. FP8 Turbo is
-12.2 GB plus the 4.9 GB text encoder, which ComfyUI moves off the GPU between steps when
-needed. On RTX 50xx / Blackwell, `KREA2_MODELS=nvfp4,raw` (Turbo 7.2 GB) is smaller and faster.
-Setup warns under 20 GB of VRAM. Training needs more (see above).
+The GPU is picked when you deploy a pod, not in the template, so one template covers
+both: generate on a cheaper GPU, train on a bigger one, with the **same volume** attached
+to both pods (a Global Volume lets the big GPU be in any datacenter). Each workflow's
+"Start here" note repeats its line below.
+
+| Workflow | Minimum | Comfortable | Out of memory, or very slow? |
+|---|---|---|---|
+| 1 Single image | 24 GB: RTX 4090, A5000, L4 | 32 GB: RTX 5090 | smaller image size (832 x 832); on RTX 50xx `KREA2_MODELS=nvfp4,raw` |
+| 2 Batch | 24 GB | 32 GB | same; the list renders one image at a time, so its length doesn't matter |
+| 3 Eight views | 24 GB | 32 GB | same; the reference adds a little memory |
+| 4 LoRA training set | 24 GB | 32 GB | same: this is generation, not training |
+| 5 Train a LoRA | 32 GB: RTX 5090 (tight) | **48 GB**: L40S, RTX 6000 Ada, A6000, A40; 80 GB (A100, H100) is fastest | Train LoRA > `offloading` on (slower), or `rank` 8 |
+
+Generation loads Krea 2 Turbo FP8 (12.2 GB) and the Qwen3-VL text encoder (4.9 GB);
+ComfyUI moves them off the GPU between steps when it has to, which is slower but still
+finishes. Training also holds every layer's activations at 1024 x 1024 for the backward
+pass, which is why it needs far more. **The training figures are estimates until measured
+on a pod.** Setup prints the GPU and its memory at boot, warns under 20 GB, and notes when
+a GPU is under 32 GB for training.
 
 ## RunPod template settings
 

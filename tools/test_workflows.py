@@ -223,6 +223,20 @@ class WorkflowTests(unittest.TestCase):
         tests = next(n for n in nodes.values() if n["type"] == "Krea2PromptList")
         self.assertTrue(all(l.startswith(trigger) for l in pack.read_lines(tests["widgets_values"][0], "")))
 
+    def test_every_workflow_states_its_gpu_needs(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        gpu = readme[readme.index("\n## GPU\n"):]
+        gpu = gpu[:gpu.index("\n## ", 5)]
+        for n, (w, wf, nodes) in enumerate(self.each(), 1):
+            with self.subTest(workflow=w["path"]):
+                start = next(x for x in nodes.values() if x.get("title") == "Start here")
+                text = start["widgets_values"][0]
+                self.assertRegex(text, r"\*\*GPU[^*]*:\*\* \d+ GB minimum")
+                self.assertIn("**Out of memory", text)
+                self.assertRegex(gpu, rf"\n\| {n} [A-Z]")       # a row in the README's GPU table
+        self.assertIn("48 GB", builder.GPU_NOTES["train"])
+        self.assertIn("not yet measured", builder.GPU_NOTES["train"])
+
     def test_setup_downloads_every_model_a_workflow_loads(self):
         fetched = set(re.findall(r'download_model "([a-z_]+/[^"]+)"', SETUP))
         fetched |= {f"loras/krea2_{n}.safetensors" for n in re.search(

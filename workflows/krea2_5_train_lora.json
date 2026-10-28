@@ -13,7 +13,7 @@
    ],
    "size": [
     520,
-    640
+    860
    ],
    "flags": {},
    "order": 0,
@@ -25,7 +25,7 @@
    },
    "title": "Start here",
    "widgets_values": [
-    "# Krea 2 - Train a LoRA\n\nTrains a Krea 2 **image** LoRA on a folder of images + captions, then tests it.\n\n1. Make the set with **krea2_4_lora_training_set** (or upload your own images + same-name .txt captions into a folder under `ComfyUI/output/`).\n2. **Load Training Set** (stage 1): the folder, default `krea2_dataset/my_person`. Deleted images are left out.\n3. **Test prompts** (stage 4): use your trigger word.\n4. **Run** once. Training takes a while (watch the progress bar on Train LoRA); then the test images render.\n\nThe LoRA is saved to `ComfyUI/output/loras/krea2_my_person_<steps>_steps_00001_.safetensors` and appears in every LoRA loader.\n\nNeeds a 32 GB+ GPU (RTX 5090) or 48 GB (L40S, A6000); 24 GB with **offloading** on, slowly. The Raw model downloads by default (`KREA2_MODELS=fp8,raw`).\n\n**Red nodes are the ones you set.** Stages run left to right with a note under each.\n\nFull instructions: https://github.com/tenitsky/krea2-image"
+    "# Krea 2 - Train a LoRA\n\nTrains a Krea 2 **image** LoRA on a folder of images + captions, then tests it.\n\n1. Make the set with **krea2_4_lora_training_set** (or upload your own images + same-name .txt captions into a folder under `ComfyUI/output/`).\n2. **Load Training Set** (stage 1): the folder, default `krea2_dataset/my_person`. Deleted images are left out.\n3. **Test prompts** (stage 4): use your trigger word.\n4. **Run** once. Training takes a while (watch the progress bar on Train LoRA); then the test images render.\n\nThe LoRA is saved to `ComfyUI/output/loras/krea2_my_person_<steps>_steps_00001_.safetensors` and appears in every LoRA loader. The Raw model it trains on downloads by default (`KREA2_MODELS=fp8,raw`).\n\n**GPU (estimates, not yet measured):** 32 GB minimum (RTX 5090, tight), **48 GB recommended** (L40S, RTX 6000 Ada, A6000, A40), 80 GB fastest (A100, H100). Training needs much more memory than generating.\n\n**Out of memory?** In Train LoRA turn on `offloading` (slower) or lower `rank` to 8. Or train on a bigger GPU: deploy this template on it with the **same volume**, train, then go back to a cheap GPU to generate.\n\n**Red nodes are the ones you set.** Stages run left to right with a note under each.\n\nFull instructions: https://github.com/tenitsky/krea2-image"
    ],
    "color": "#222",
    "bgcolor": "#000"
@@ -35,7 +35,7 @@
    "type": "MarkdownNote",
    "pos": [
     0,
-    690
+    910
    ],
    "size": [
     520,

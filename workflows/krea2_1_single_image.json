@@ -13,7 +13,7 @@
    ],
    "size": [
     520,
-    640
+    860
    ],
    "flags": {},
    "order": 0,
@@ -25,7 +25,7 @@
    },
    "title": "Start here",
    "widgets_values": [
-    "# Krea 2 - Single image\n\n1. Write your prompt in **Prompt** (stage 1).\n2. **Run**. The image is saved to `ComfyUI/output/krea2/`.\n\nOptional: enable **Style LoRA** (right-click > Bypass) after downloading the style LoRAs (`DOWNLOAD_STYLE_LORAS=1` at deploy). Each has a trigger word, listed in its note.\n\n**Red nodes are the ones you set.** Stages run left to right with a note under each.\n\nFull instructions: https://github.com/tenitsky/krea2-image"
+    "# Krea 2 - Single image\n\n1. Write your prompt in **Prompt** (stage 1).\n2. **Run**. The image is saved to `ComfyUI/output/krea2/`.\n\nOptional: enable **Style LoRA** (right-click > Bypass) after downloading the style LoRAs (`DOWNLOAD_STYLE_LORAS=1` at deploy). Each has a trigger word, listed in its note.\n\n**GPU:** 24 GB minimum (RTX 4090, A5000, L4), 32 GB comfortable (RTX 5090).\n\n**Out of memory, or very slow?** Use a smaller image size (832 x 832), or on an RTX 50xx the nvfp4 model (`KREA2_MODELS=nvfp4,raw` at deploy). ComfyUI moves models off the GPU when it has to: slower, but it still finishes.\n\n**Red nodes are the ones you set.** Stages run left to right with a note under each.\n\nFull instructions: https://github.com/tenitsky/krea2-image"
    ],
    "color": "#222",
    "bgcolor": "#000"
@@ -35,7 +35,7 @@
    "type": "MarkdownNote",
    "pos": [
     0,
-    690
+    910
    ],
    "size": [
     520,

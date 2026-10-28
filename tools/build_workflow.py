@@ -140,6 +140,30 @@ Krea 2 Turbo's settings: **{STEPS} steps, CFG {CFG:g}, {SAMPLER} / {SCHEDULER}**
 **Size**: 1024 x 1024 by default. Other good sizes: 832 x 1216 (portrait), 1216 x 832, 1344 x 768 (landscape), 768 x 1344."""
 
 
+# GPU memory per workflow, shown in each "Start here" note and in the README's GPU table.
+# Generation: Krea 2 Turbo FP8 (12.2 GB) + the Qwen3-VL text encoder (4.9 GB).
+# Training: estimates until measured on a pod.
+_GEN_OOM = ("**Out of memory, or very slow?** Use a smaller image size (832 x 832), or on an "
+            "RTX 50xx the nvfp4 model (`KREA2_MODELS=nvfp4,raw` at deploy). ComfyUI moves models "
+            "off the GPU when it has to: slower, but it still finishes.")
+GPU_NOTES = {
+    "single": "**GPU:** 24 GB minimum (RTX 4090, A5000, L4), 32 GB comfortable (RTX 5090).\n\n" + _GEN_OOM,
+    "batch": ("**GPU:** 24 GB minimum (RTX 4090, A5000, L4), 32 GB comfortable (RTX 5090). The "
+              "images render one after another, so a long list needs no more GPU memory than "
+              "one image.\n\n" + _GEN_OOM),
+    "views": ("**GPU:** 24 GB minimum (RTX 4090, A5000, L4), 32 GB comfortable (RTX 5090). The "
+              "reference portrait adds a little memory on top of plain text-to-image.\n\n" + _GEN_OOM),
+    "dataset": ("**GPU:** 24 GB minimum (RTX 4090, A5000, L4), 32 GB comfortable (RTX 5090). "
+                "Making the set is image generation, not training: a cheap GPU is fine.\n\n" + _GEN_OOM),
+    "train": ("**GPU (estimates, not yet measured):** 32 GB minimum (RTX 5090, tight), **48 GB "
+              "recommended** (L40S, RTX 6000 Ada, A6000, A40), 80 GB fastest (A100, H100). "
+              "Training needs much more memory than generating.\n\n**Out of memory?** In Train LoRA "
+              "turn on `offloading` (slower) or lower `rank` to 8. Or train on a bigger GPU: "
+              "deploy this template on it with the **same volume**, train, then go back to a "
+              "cheap GPU to generate."),
+}
+
+
 def note_start(kind):
     steps = {
         "single": ("Krea 2 - Single image",
@@ -151,11 +175,13 @@ def note_start(kind):
         "dataset": ("Krea 2 - LoRA training set",
                     f"Builds a training set for a character LoRA: **24 images of the same person** with a caption .txt each.\n\n1. **Load Reference** (stage 1): a clear photo of the person.\n2. Set your **trigger word** in Prompt List > `caption_prefix` (default `{TRIGGER}`).\n3. **Run** once. Images + captions go to `ComfyUI/output/{DATASET_FOLDER}/` as `image_0001.png` + `image_0001.txt` (the layout ai-toolkit and kohya read too).\n\n**Check every image** in the contact sheet and delete the ones where the face drifted (JupyterLab): a LoRA learns its mistakes too. Then train with **krea2_5_train_lora**."),
         "train": ("Krea 2 - Train a LoRA",
-                  f"Trains a Krea 2 **image** LoRA on a folder of images + captions, then tests it.\n\n1. Make the set with **krea2_4_lora_training_set** (or upload your own images + same-name .txt captions into a folder under `ComfyUI/output/`).\n2. **Load Training Set** (stage 1): the folder, default `{DATASET_FOLDER}`. Deleted images are left out.\n3. **Test prompts** (stage 4): use your trigger word.\n4. **Run** once. Training takes a while (watch the progress bar on Train LoRA); then the test images render.\n\nThe LoRA is saved to `ComfyUI/output/{LORA_PREFIX}_<steps>_steps_00001_.safetensors` and appears in every LoRA loader.\n\nNeeds a 32 GB+ GPU (RTX 5090) or 48 GB (L40S, A6000); 24 GB with **offloading** on, slowly. The Raw model downloads by default (`KREA2_MODELS=fp8,raw`)."),
+                  f"Trains a Krea 2 **image** LoRA on a folder of images + captions, then tests it.\n\n1. Make the set with **krea2_4_lora_training_set** (or upload your own images + same-name .txt captions into a folder under `ComfyUI/output/`).\n2. **Load Training Set** (stage 1): the folder, default `{DATASET_FOLDER}`. Deleted images are left out.\n3. **Test prompts** (stage 4): use your trigger word.\n4. **Run** once. Training takes a while (watch the progress bar on Train LoRA); then the test images render.\n\nThe LoRA is saved to `ComfyUI/output/{LORA_PREFIX}_<steps>_steps_00001_.safetensors` and appears in every LoRA loader. The Raw model it trains on downloads by default (`KREA2_MODELS=fp8,raw`)."),
     }[kind]
     return f"""# {steps[0]}
 
 {steps[1]}
+
+{GPU_NOTES[kind]}
 
 **Red nodes are the ones you set.** Stages run left to right with a note under each.
 
@@ -334,7 +360,7 @@ def build(kind):
     w = next(w for w in WORKFLOWS if w["kind"] == kind)
     g = Graph()
     L = g.link
-    md(g, 1, "Start here", note_start(kind), (COLUMN_W, 640))
+    md(g, 1, "Start here", note_start(kind), (COLUMN_W, 860))
     md(g, 2, "About Krea 2", NOTE_ABOUT, (COLUMN_W, 380))
     md(g, 5, "About stage 2", NOTE_MODELS, (COLUMN_W, 300))
     md(g, 7, "About sampling", NOTE_SAMPLE, (COLUMN_W, 300))

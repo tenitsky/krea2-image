@@ -197,6 +197,9 @@ print(f"GPU: {name}, {vram:.0f} GB")
 if vram < 20:
     print("WARNING: Krea 2 Turbo FP8 is a 12 GB model plus a 5 GB text encoder; under "
           "24 GB of VRAM ComfyUI offloads and every image is much slower.")
+if vram < 32:
+    print(f"NOTE: {vram:.0f} GB is fine for generating images. Training a LoRA (workflow 5) "
+          "needs 32 GB+, 48 GB recommended: deploy a bigger GPU with the same volume for it.")
 PY
 then
   exit 1
