@@ -1,0 +1,8 @@
+# One prompt per line. Lines starting with # are skipped.
+# Or put them in a .txt file in ComfyUI/input/ and name it in prompts_file.
+A lighthouse on a rocky cliff at golden hour, waves crashing, cinematic wide shot
+Close-up of a ceramic coffee cup on a wooden table, morning light through a window, steam rising
+A red vintage motorbike parked in a narrow Italian alley, laundry hanging above, summer afternoon
+Portrait of an elderly fisherman with a weathered face and a knitted cap, overcast harbour behind him
+A cozy reading nook with a green armchair, stacked books and a warm lamp, rainy evening outside
+Aerial view of a winding river through autumn forest, mist in the valleys

@@ -1,0 +1,96 @@
+################################################################################
+#  Krea 2 Image - RunPod template setup sheet
+#  Fill in RunPod > Templates > New Template with the values below.
+#  Console: https://console.runpod.io/user/templates
+#  Source of truth: README.md "RunPod template settings" section.
+################################################################################
+
+
+# ------------------------------------------------------------------------------
+# 1. BASIC INFO
+# ------------------------------------------------------------------------------
+
+Template name:            Krea 2 Image - ComfyUI + JupyterLab
+Template type:            Pod
+Compute type:             NVIDIA / GPU
+Visibility:               Public (or Private while testing)
+
+
+# ------------------------------------------------------------------------------
+# 2. CONTAINER IMAGE
+# ------------------------------------------------------------------------------
+
+Container image:          runpod/comfyui:1.4.0-comfyuiv0.35.0-cuda12.8
+Registry credentials:     none (public image)
+
+# The same image as the FlashHead Pro and LongCat templates: PyTorch 2.10 (CUDA 12.8),
+# Python 3.12, ComfyUI v0.35.0 at /workspace/runpod-slim/ComfyUI, /start.sh with the
+# JUPYTER_DISABLE_AUTH switch. Krea 2 is native in ComfyUI since v0.26.0.
+# Image page: https://hub.docker.com/r/runpod/comfyui/tags
+
+
+# ------------------------------------------------------------------------------
+# 3. CONTAINER START COMMAND
+# ------------------------------------------------------------------------------
+# Paste the contents of runpod-start.json into the "Container Start Command" field
+# (the readable version is bootstrap.sh).
+# What it does: checks DNS for github.com + huggingface.co (falls back to
+# 1.1.1.1 / 8.8.8.8 if needed), clones this repo (10 retries), runs setup.sh.
+# setup.sh installs everything, downloads the models and finally runs /start.sh.
+# Raw file: https://raw.githubusercontent.com/tenitsky/krea2-image/main/runpod-start.json
+
+
+# ------------------------------------------------------------------------------
+# 4. STORAGE
+# ------------------------------------------------------------------------------
+
+Container disk:           40 GB
+# A Global Volume stages each download on the container disk (the FP8 model is
+# 12.2 GB, bf16 24.5 GB) and keeps ComfyUI there. With a Network Volume, 10 GB is
+# enough - but the template has one value, so 40 GB covers both.
+
+Volume disk:              0 GB
+Volume mount path:        /workspace
+# Each deployer attaches their own Network Volume (40 GB) or Global Volume at
+# /workspace when deploying. Setup detects which one and says so in the log.
+
+
+# ------------------------------------------------------------------------------
+# 5. PORTS
+# ------------------------------------------------------------------------------
+
+HTTP ports:               8188,8888
+#   8188  ComfyUI
+#   8888  JupyterLab (uploads, downloads, terminal)
+TCP ports:                none (22 only if you want SSH)
+
+
+# ------------------------------------------------------------------------------
+# 6. ENVIRONMENT VARIABLES
+# ------------------------------------------------------------------------------
+
+JUPYTER_NO_AUTH=1
+# Optional:
+#   KREA2_MODELS=fp8           fp8 | bf16 | nvfp4 | raw, comma-separated
+#   KREA2_TEXT_ENCODER=fp8     fp8 | bf16
+#   DOWNLOAD_STYLE_LORAS=0     1 = Krea's 9 style LoRAs + the style-reference LoRA
+#   HF_TOKEN=                  not needed (ungated); raises rate limits
+#   KREA2_STORAGE=auto         network | global overrides the detection
+#   TEMPLATE_REF=main          branch or tag of the repo to clone
+
+
+# ------------------------------------------------------------------------------
+# 7. README TAB
+# ------------------------------------------------------------------------------
+# Paste TEMPLATE_README.md.
+
+
+# ------------------------------------------------------------------------------
+# 8. LINKS
+# ------------------------------------------------------------------------------
+# This template repo:        https://github.com/tenitsky/krea2-image
+# Models (ComfyUI package):  https://huggingface.co/Comfy-Org/Krea-2
+# Krea 2:                    https://www.krea.ai/krea-2-open-source
+# Licence:                   https://huggingface.co/krea/Krea-2-Turbo/blob/main/LICENSE.pdf
+# Comfy-Org's Krea 2 workflows: https://github.com/Comfy-Org/workflow_templates
+#                            (templates/image_krea2_turbo_*.json)
